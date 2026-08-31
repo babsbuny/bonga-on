@@ -119,6 +119,7 @@ async function seed() {
   let rngState = 42;
   const rng = () => { rngState = (rngState * 1103515245 + 12345) % 2147483648; return rngState / 2147483648; };
   const channels = [['baemin', 0.38], ['coupang', 0.22], ['yogiyo', 0.08], ['hall', 0.24], ['takeout', 0.08]];
+  const salesRows = [];
   for (const [storeId, base] of [[suwon, 1150000], [gangnam, 1580000]]) {
     for (let d = 35; d >= 1; d--) {
       const dateStr = kstDate(-d);
@@ -128,10 +129,17 @@ async function seed() {
       for (const [ch, share] of channels) {
         const amount = Math.round(dayTotal * share * (0.85 + rng() * 0.3) / 100) * 100;
         const ordersCount = Math.max(1, Math.round(amount / (19000 + rng() * 6000)));
-        await run('INSERT INTO sales (store_id, date, channel, amount, orders_count) VALUES (?,?,?,?,?)',
-          [storeId, dateStr, ch, amount, ordersCount]);
+        salesRows.push([storeId, dateStr, ch, amount, ordersCount]);
       }
     }
+  }
+  // 일괄 INSERT — 왕복 지연이 큰 원격 DB에서 시드가 타임아웃되지 않도록 청크 처리
+  for (let i = 0; i < salesRows.length; i += 100) {
+    const chunk = salesRows.slice(i, i + 100);
+    await run(
+      'INSERT INTO sales (store_id, date, channel, amount, orders_count) VALUES ' +
+      chunk.map(() => '(?,?,?,?,?)').join(','),
+      chunk.flat());
   }
 
   const reviews = [
