@@ -90,8 +90,14 @@ async function ensureSchema() {
 }
 
 async function seed() {
-  const { c } = await one('SELECT COUNT(*) AS c FROM users');
-  if (c > 0) return;
+  const users = await one('SELECT COUNT(*) AS c FROM users');
+  const sales = await one('SELECT COUNT(*) AS c FROM sales');
+  if (users.c > 0 && sales.c >= 350) return;
+  if (users.c > 0) {
+    // 이전 시드가 도중에 끊긴 상태 — 정리 후 다시 시드
+    for (const t of ['notice_reads', 'order_items', 'orders', 'notices', 'reviews', 'sales', 'products', 'users'])
+      await run(`DELETE FROM ${t}`);
+  }
 
   const BRAND = '경주본가';   // 첫 데모 고객사
   const hash = bcrypt.hashSync('bonga1234', 10);
