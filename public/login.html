@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>본가ON — 로그인</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .center{min-height:100vh;display:grid;place-items:center;padding:20px}
+  .box{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);
+    border-radius:16px;padding:34px 30px;box-shadow:var(--shadow);display:grid;gap:14px}
+  .box h1{font-size:26px;text-align:center}
+  .box h1 em{font-style:normal;color:var(--accent)}
+  .box .sub{text-align:center;font-size:13px;color:var(--ink3);margin-top:-8px;margin-bottom:6px}
+  .err{color:var(--bad);font-size:13px;min-height:18px}
+  .demo{border-top:1px solid var(--line);padding-top:14px;font-size:12.5px;color:var(--ink3)}
+  .demo .chips{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+  .demo button{font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px;background:var(--surface2)}
+</style>
+</head>
+<body>
+<div class="center">
+  <form class="box" id="loginForm">
+    <h1>본가<em>ON</em></h1>
+    <p class="sub">경주본가 가맹점 운영 플랫폼</p>
+    <div><label for="u">아이디</label><input id="u" autocomplete="username" required></div>
+    <div><label for="p">비밀번호</label><input id="p" type="password" autocomplete="current-password" required></div>
+    <div class="err" id="err"></div>
+    <button class="btn btn-primary" type="submit">로그인</button>
+    <div class="demo">
+      데모 계정으로 둘러보기 (비밀번호 자동 입력)
+      <div class="chips">
+        <button type="button" onclick="fill('suwon')">수원인계점 (프로)</button>
+        <button type="button" onclick="fill('gangnam')">강남점 (베이직)</button>
+        <button type="button" onclick="fill('hq')">본사 관리자</button>
+      </div>
+    </div>
+  </form>
+</div>
+<script>
+function fill(u){
+  document.getElementById('u').value = u;
+  document.getElementById('p').value = 'bonga1234';
+}
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = document.getElementById('err'); err.textContent = '';
+  const res = await fetch('/api/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username: document.getElementById('u').value.trim(),
+                           password: document.getElementById('p').value })
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || '로그인에 실패했습니다'; return; }
+  location.href = data.user.role === 'hq' ? '/admin.html' : '/app.html';
+});
+</script>
+</body>
+</html>

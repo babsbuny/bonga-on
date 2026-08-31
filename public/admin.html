@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>본가ON — 본사 관제</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">본가<em>ON</em></span><span class="sub">본사 관제</span></div>
+  <div class="right">
+    <span>경주본가 본사</span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="side">
+    <div class="store"><b>경주본가 본사</b><span>관리자</span></div>
+    <button data-tab="overview" class="on">🏪 지점 현황</button>
+    <button data-tab="orders">🚚 발주 관리</button>
+    <button data-tab="notices">📢 공지 작성</button>
+    <div class="grow"></div>
+    <div class="plansmall"><b>본사 플랜</b><br>전 지점 통합 관제</div>
+  </aside>
+
+  <main class="main">
+
+    <section data-panel="overview">
+      <h2 class="title">지점 현황</h2>
+      <p class="subtitle" id="ovSub"></p>
+      <div class="card" style="margin-top:14px">
+        <h3>가맹점별 실적</h3>
+        <div class="ch">어제 · 최근 7일 매출과 리뷰 현황</div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>지점</th><th>플랜</th><th class="r">어제 매출</th><th class="r">7일 매출</th><th class="r">평점</th><th class="r">답글 대기</th></tr></thead>
+          <tbody id="storeRows"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section data-panel="orders" hidden>
+      <h2 class="title">발주 관리</h2>
+      <p class="subtitle">가맹점 발주를 확인하고 물류 상태를 바꿔주세요.</p>
+      <div id="hqOrders" style="margin-top:12px"></div>
+    </section>
+
+    <section data-panel="notices" hidden>
+      <h2 class="title">공지 작성</h2>
+      <p class="subtitle">등록 즉시 전 가맹점 앱에 표시됩니다.</p>
+      <div class="card" style="margin-top:14px;max-width:640px">
+        <form id="noticeForm" style="display:grid;gap:12px">
+          <div class="formrow">
+            <div><label for="nTag">분류</label>
+              <select id="nTag"><option>본사</option><option>신메뉴</option><option>이벤트</option></select></div>
+            <div style="grid-column:span 2"><label for="nTitle">제목</label><input id="nTitle" required maxlength="80"></div>
+          </div>
+          <div><label for="nBody">내용</label><textarea id="nBody" required rows="4"></textarea></div>
+          <button class="btn btn-primary" type="submit" style="justify-self:start">공지 등록</button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const won = (n) => (n ?? 0).toLocaleString('ko-KR') + '원';
+let toastTimer;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+async function api(url, opts = {}){
+  const res = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
+  if (res.status === 401 || res.status === 403) { location.href = '/login.html'; throw new Error('auth'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { toast(data.error || '요청에 실패했습니다'); throw new Error(res.status); }
+  return data;
+}
+async function logout(){ await fetch('/api/logout', {method:'POST'}); location.href = '/login.html'; }
+
+document.querySelectorAll('.side button[data-tab]').forEach(btn =>
+  btn.addEventListener('click', () => showTab(btn.dataset.tab)));
+function showTab(tab){
+  document.querySelectorAll('.side button[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== tab);
+  ({ overview: loadOverview, orders: loadOrders }[tab] || (() => {}))();
+}
+
+async function loadOverview(){
+  const d = await api('/api/hq/overview');
+  $('#ovSub').textContent = `가맹점 ${d.stores.length}곳 · 처리 대기 발주 ${d.pendingOrders}건`;
+  $('#storeRows').innerHTML = d.stores.map(s => `
+    <tr><td><b>${s.store_name}</b></td>
+      <td><span class="pill ${s.plan === 'pro' ? 'good' : 'neutral'}">${s.plan === 'pro' ? '프로' : '베이직'}</span></td>
+      <td class="r num">${won(s.yesterday)}</td>
+      <td class="r num">${won(s.week)}</td>
+      <td class="r num">${s.avg_rating ?? '-'}</td>
+      <td class="r">${s.pending_reviews ? `<span class="pill warn">${s.pending_reviews}건</span>` : '<span class="pill good">완료</span>'}</td></tr>`).join('');
+}
+
+const STATUSES = ['접수','확정','배송중','완료','취소'];
+async function loadOrders(){
+  const { rows } = await api('/api/hq/orders');
+  const badge = { '접수':'warn', '확정':'acc', '배송중':'acc', '완료':'good', '취소':'bad' };
+  $('#hqOrders').innerHTML = rows.length ? rows.map(o => `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <b>#${o.id} · ${o.store_name}</b>
+          <span class="pill ${badge[o.status] || 'neutral'}" style="margin-left:7px">${o.status}</span>
+          <div style="font-size:12.5px;color:var(--ink3);margin-top:4px">
+            ${o.created_at.slice(0,16)} · ${o.items.map(i => `${i.name}×${i.qty}`).join(', ')}</div>
+          <div class="num" style="font-size:14px;font-weight:600;margin-top:2px">${won(o.total)}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="st${o.id}" style="width:auto">${STATUSES.map(s =>
+            `<option ${s === o.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          <button class="btn btn-primary btn-sm" onclick="setStatus(${o.id})">변경</button>
+        </div>
+      </div>
+    </div>`).join('') : '<p class="empty">발주가 없습니다</p>';
+}
+async function setStatus(id){
+  await api(`/api/hq/orders/${id}/status`, { method:'PUT',
+    body: JSON.stringify({ status: $(`#st${id}`).value }) });
+  toast(`발주 #${id} 상태가 변경되었습니다`);
+  loadOrders();
+}
+
+$('#noticeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await api('/api/hq/notices', { method:'POST', body: JSON.stringify({
+    tag: $('#nTag').value, title: $('#nTitle').value, body: $('#nBody').value }) });
+  toast('공지가 등록되었습니다 — 전 가맹점 앱에 표시됩니다');
+  $('#nTitle').value = ''; $('#nBody').value = '';
+});
+
+(async () => {
+  const { user } = await api('/api/me');
+  if (user.role !== 'hq') { location.href = '/app.html'; return; }
+  loadOverview();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>본가ON — 내 가게</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">본가<em>ON</em></span><span class="sub">가맹점</span></div>
+  <div class="right">
+    <span id="whoami"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="side">
+    <div class="store"><b id="storeName">…</b><span id="planLabel"></span></div>
+    <button data-tab="dash" class="on">📊 대시보드</button>
+    <button data-tab="sales">💰 매출</button>
+    <button data-tab="reviews">⭐ 리뷰 관리</button>
+    <button data-tab="orders">🚚 발주</button>
+    <button data-tab="notices">📢 본사 소식</button>
+    <button data-tab="plan">💳 요금제</button>
+    <div class="grow"></div>
+    <div class="plansmall" id="planSmall"></div>
+  </aside>
+
+  <main class="main">
+
+    <!-- 대시보드 -->
+    <section data-panel="dash">
+      <h2 class="title" id="greeting">안녕하세요, 사장님</h2>
+      <p class="subtitle" id="greetSub"></p>
+      <div class="kpis" id="kpis" style="margin-top:14px"></div>
+      <div class="duo" style="margin-top:13px">
+        <div class="card">
+          <h3>최근 7일 매출</h3>
+          <div class="ch">채널 합산 · 수수료 차감 전</div>
+          <svg class="chart" id="weekChart" viewBox="0 0 560 200" preserveAspectRatio="none" role="img" aria-label="주간 매출 차트"></svg>
+          <div class="legend" id="weekLegend"></div>
+        </div>
+        <div class="card">
+          <h3>어제 채널별 매출</h3>
+          <div class="ch">배달앱 · 홀 · 포장</div>
+          <div class="tablewrap"><table>
+            <thead><tr><th>채널</th><th class="r">매출</th><th class="r">주문</th></tr></thead>
+            <tbody id="channelRows"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 매출 -->
+    <section data-panel="sales" hidden>
+      <h2 class="title">매출</h2>
+      <p class="subtitle">배달앱 자동 연동 전까지는 일별 매출을 직접 기록할 수 있습니다.</p>
+      <div class="card" style="margin-top:14px">
+        <h3>매출 기록 추가</h3>
+        <div class="ch">마감 후 채널별 매출을 입력하세요</div>
+        <form id="saleForm" class="formrow">
+          <div><label for="sDate">날짜</label><input type="date" id="sDate" required></div>
+          <div><label for="sChannel">채널</label>
+            <select id="sChannel">
+              <option value="baemin">배달의민족</option><option value="coupang">쿠팡이츠</option>
+              <option value="yogiyo">요기요</option><option value="hall">홀</option>
+              <option value="takeout">포장</option>
+            </select></div>
+          <div><label for="sAmount">금액(원)</label><input type="number" id="sAmount" min="100" step="100" required></div>
+          <div><label for="sOrders">주문 수</label><input type="number" id="sOrders" min="0" value="0"></div>
+          <button class="btn btn-primary" type="submit">기록</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3>최근 30일 일별 매출</h3>
+        <div class="ch">채널 합산</div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>날짜</th><th class="r">배민</th><th class="r">쿠팡이츠</th><th class="r">요기요</th><th class="r">홀</th><th class="r">포장</th><th class="r">합계</th></tr></thead>
+          <tbody id="salesRows"></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- 리뷰 -->
+    <section data-panel="reviews" hidden>
+      <h2 class="title">리뷰 관리</h2>
+      <p class="subtitle">AI가 브랜드 톤에 맞는 답글 초안을 제안합니다. 확인·수정 후 등록하세요.</p>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-ghost btn-sm" id="fltPending">답글 대기</button>
+        <button class="btn btn-ghost btn-sm" id="fltAll">전체</button>
+      </div>
+      <div id="reviewList" style="margin-top:6px"></div>
+    </section>
+
+    <!-- 발주 -->
+    <section data-panel="orders" hidden>
+      <h2 class="title">발주</h2>
+      <p class="subtitle">오후 5시 이전 접수 시 다음 날 매장에 도착합니다.</p>
+      <div class="duo" style="margin-top:14px">
+        <div class="card">
+          <h3>품목 담기</h3>
+          <div class="ch">본사 물류 전 품목</div>
+          <div class="tablewrap"><table>
+            <thead><tr><th>품목</th><th class="r">단가</th><th class="r">수량</th><th class="r">금액</th></tr></thead>
+            <tbody id="productRows"></tbody>
+          </table></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:13px;padding-top:13px;border-top:1px solid var(--line);flex-wrap:wrap;gap:10px">
+            <span style="font-size:14px;color:var(--ink2)">합계 <b class="num" id="cartTotal" style="font-size:17px;color:var(--ink)">0원</b></span>
+            <button class="btn btn-primary btn-sm" id="submitOrder">발주 접수하기</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>발주 내역</h3>
+          <div class="ch">최근 30건</div>
+          <div id="orderHistory"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 공지 -->
+    <section data-panel="notices" hidden>
+      <h2 class="title">본사 소식</h2>
+      <p class="subtitle">공지를 클릭하면 읽음 처리됩니다.</p>
+      <div id="noticeList" style="margin-top:12px"></div>
+    </section>
+
+    <!-- 요금제 -->
+    <section data-panel="plan" hidden>
+      <h2 class="title">요금제</h2>
+      <p class="subtitle">현재 이용 중인 플랜과 기능입니다.</p>
+      <div class="duo" style="margin-top:14px">
+        <div class="card" id="planCard"></div>
+        <div class="card">
+          <h3>결제 안내</h3>
+          <div class="ch">데모 버전</div>
+          <p style="font-size:13.5px;color:var(--ink2)">실서비스에서는 토스페이먼츠 정기결제 연동으로
+            매월 자동 결제됩니다. 현재 데모에서는 결제 없이 플랜별 기능 차이만 체험할 수 있습니다.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+<script src="/app.js"></script>
+</body>
+</html>
