@@ -264,7 +264,11 @@ app.post('/api/hq/notices', requireHq, (req, res) => {
   res.json({ ok: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`[본가ON] http://localhost:${PORT}`);
-  console.log(`[본가ON] AI 답글: ${process.env.OPENROUTER_API_KEY ? `OpenRouter (${AI_MODEL})` : '규칙 기반 대체 모드 (OPENROUTER_API_KEY 없음)'}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[본가ON] http://localhost:${PORT}`);
+    console.log(`[본가ON] AI 답글: ${process.env.OPENROUTER_API_KEY ? `OpenRouter (${AI_MODEL})` : '규칙 기반 대체 모드 (OPENROUTER_API_KEY 없음)'}`);
+  });
+}
+
+module.exports = app;

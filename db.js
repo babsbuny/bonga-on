@@ -3,7 +3,9 @@ const { DatabaseSync } = require('node:sqlite');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
-const db = new DatabaseSync(path.join(__dirname, 'bonga-on.db'));
+// Vercel 등 서버리스 환경은 쓰기 가능한 경로가 /tmp뿐 (콜드스타트마다 재시드됨)
+const DB_PATH = process.env.VERCEL ? '/tmp/bonga-on.db' : path.join(__dirname, 'bonga-on.db');
+const db = new DatabaseSync(DB_PATH);
 
 db.exec(`
   PRAGMA journal_mode = WAL;
