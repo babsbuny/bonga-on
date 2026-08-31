@@ -11,17 +11,18 @@
 <header class="topbar">
   <div class="brand"><span class="logo"><em>한큐</em>배달</span><span class="sub">본사 관제</span></div>
   <div class="right">
-    <span>경주본가 본사</span>
+    <span id="whoami"></span>
     <button class="btn btn-ghost btn-sm" onclick="logout()">로그아웃</button>
   </div>
 </header>
 
 <div class="layout">
   <aside class="side">
-    <div class="store"><b>경주본가 본사</b><span>관리자</span></div>
+    <div class="store"><b id="brandName">…</b><span>본사 관리자</span></div>
     <button data-tab="overview" class="on">🏪 지점 현황</button>
     <button data-tab="orders">🚚 발주 관리</button>
     <button data-tab="notices">📢 공지 작성</button>
+    <button data-tab="faqs">💬 FAQ·챗봇</button>
     <div class="grow"></div>
     <div class="plansmall"><b>본사 플랜</b><br>전 지점 통합 관제</div>
   </aside>
@@ -31,7 +32,7 @@
     <section data-panel="overview">
       <h2 class="title">지점 현황</h2>
       <p class="subtitle" id="ovSub"></p>
-      <div class="card" style="margin-top:14px">
+      <div class="card" style="margin-top:10px">
         <h3>가맹점별 실적</h3>
         <div class="ch">어제 · 최근 7일 매출과 리뷰 현황</div>
         <div class="tablewrap"><table>
@@ -44,13 +45,13 @@
     <section data-panel="orders" hidden>
       <h2 class="title">발주 관리</h2>
       <p class="subtitle">가맹점 발주를 확인하고 물류 상태를 바꿔주세요.</p>
-      <div id="hqOrders" style="margin-top:12px"></div>
+      <div id="hqOrders" style="margin-top:8px"></div>
     </section>
 
     <section data-panel="notices" hidden>
       <h2 class="title">공지 작성</h2>
-      <p class="subtitle">등록 즉시 전 가맹점 앱에 표시됩니다.</p>
-      <div class="card" style="margin-top:14px;max-width:640px">
+      <p class="subtitle">등록 즉시 우리 브랜드 전 가맹점 앱에 표시됩니다.</p>
+      <div class="card" style="margin-top:10px;max-width:640px">
         <form id="noticeForm" style="display:grid;gap:12px">
           <div class="formrow">
             <div><label for="nTag">분류</label>
@@ -63,6 +64,28 @@
       </div>
     </section>
 
+    <section data-panel="faqs" hidden>
+      <h2 class="title">FAQ·챗봇 관리</h2>
+      <p class="subtitle">사장님 지원 챗봇(한큐봇)이 이 FAQ를 근거로 답변합니다. 답하지 못한 질문은 아래에 모입니다.</p>
+      <div class="duo" style="margin-top:10px">
+        <div class="card">
+          <h3>FAQ 목록</h3>
+          <div class="ch">추가·수정하면 챗봇에 바로 반영됩니다</div>
+          <div id="faqList"></div>
+          <form id="faqForm" style="display:grid;gap:9px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+            <div><label for="fq">새 질문</label><input id="fq" required maxlength="200" placeholder="예: 포장재는 어디서 주문하나요?"></div>
+            <div><label for="fa">답변</label><textarea id="fa" required rows="3" placeholder="사장님께 보여줄 답변"></textarea></div>
+            <button class="btn btn-primary btn-sm" type="submit" style="justify-self:start">FAQ 추가</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>챗봇이 답하지 못한 질문</h3>
+          <div class="ch">여기 보고 FAQ를 보강하세요</div>
+          <div id="unansweredList"></div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -70,6 +93,7 @@
 <script>
 const $ = (s) => document.querySelector(s);
 const won = (n) => (n ?? 0).toLocaleString('ko-KR') + '원';
+const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let toastTimer;
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -89,19 +113,20 @@ document.querySelectorAll('.side button[data-tab]').forEach(btn =>
 function showTab(tab){
   document.querySelectorAll('.side button[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== tab);
-  ({ overview: loadOverview, orders: loadOrders }[tab] || (() => {}))();
+  ({ overview: loadOverview, orders: loadOrders, faqs: loadFaqs }[tab] || (() => {}))();
 }
 
 async function loadOverview(){
   const d = await api('/api/hq/overview');
   $('#ovSub').textContent = `가맹점 ${d.stores.length}곳 · 처리 대기 발주 ${d.pendingOrders}건`;
   $('#storeRows').innerHTML = d.stores.map(s => `
-    <tr><td><b>${s.store_name}</b></td>
+    <tr><td><b>${esc(s.store_name)}</b></td>
       <td><span class="pill ${s.plan === 'pro' ? 'good' : 'neutral'}">${s.plan === 'pro' ? '프로' : '베이직'}</span></td>
       <td class="r num">${won(s.yesterday)}</td>
       <td class="r num">${won(s.week)}</td>
       <td class="r num">${s.avg_rating ?? '-'}</td>
-      <td class="r">${s.pending_reviews ? `<span class="pill warn">${s.pending_reviews}건</span>` : '<span class="pill good">완료</span>'}</td></tr>`).join('');
+      <td class="r">${s.pending_reviews ? `<span class="pill warn">${s.pending_reviews}건</span>` : '<span class="pill good">완료</span>'}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="empty">가맹점이 없습니다</td></tr>';
 }
 
 const STATUSES = ['접수','확정','배송중','완료','취소'];
@@ -112,10 +137,10 @@ async function loadOrders(){
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <div>
-          <b>#${o.id} · ${o.store_name}</b>
+          <b>#${o.id} · ${esc(o.store_name)}</b>
           <span class="pill ${badge[o.status] || 'neutral'}" style="margin-left:7px">${o.status}</span>
           <div style="font-size:12.5px;color:var(--ink3);margin-top:4px">
-            ${o.created_at.slice(0,16)} · ${o.items.map(i => `${i.name}×${i.qty}`).join(', ')}</div>
+            ${o.created_at.slice(0,16)} · ${o.items.map(i => `${esc(i.name)}×${i.qty}`).join(', ')}</div>
           <div class="num" style="font-size:14px;font-weight:600;margin-top:2px">${won(o.total)}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
@@ -141,9 +166,61 @@ $('#noticeForm').addEventListener('submit', async (e) => {
   $('#nTitle').value = ''; $('#nBody').value = '';
 });
 
+// ---------- FAQ·챗봇 ----------
+async function loadFaqs(){
+  const { rows } = await api('/api/hq/faqs');
+  $('#faqList').innerHTML = rows.length ? rows.map(f => `
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px" id="faq${f.id}">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+        <b style="font-size:13.5px">Q. ${esc(f.question)}</b>
+        <span style="display:flex;gap:5px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" onclick="editFaq(${f.id})">수정</button>
+          <button class="btn btn-ghost btn-sm" onclick="delFaq(${f.id})" style="color:var(--bad)">삭제</button>
+        </span>
+      </div>
+      <div style="font-size:13px;color:var(--ink2);margin-top:5px" id="faqA${f.id}">${esc(f.answer)}</div>
+    </div>`).join('') : '<p class="empty">FAQ가 없습니다 — 아래에서 추가하세요</p>';
+  window._faqs = rows;
+  loadUnanswered();
+}
+async function loadUnanswered(){
+  const { rows } = await api('/api/hq/chat-logs?filter=unanswered');
+  $('#unansweredList').innerHTML = rows.length ? rows.map(c => `
+    <div style="border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:10px;padding:10px 13px;margin-bottom:8px">
+      <div style="font-size:13.5px"><b>“${esc(c.question)}”</b></div>
+      <div style="font-size:12px;color:var(--ink3);margin-top:3px">${esc(c.store_name)} · ${c.created_at.slice(0,16)}</div>
+    </div>`).join('') : '<p class="empty">아직 없습니다 🎉 챗봇이 잘 답하고 있어요</p>';
+}
+$('#faqForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await api('/api/hq/faqs', { method:'POST', body: JSON.stringify({
+    question: $('#fq').value, answer: $('#fa').value }) });
+  toast('FAQ가 추가되었습니다 — 챗봇에 바로 반영됩니다');
+  $('#fq').value = ''; $('#fa').value = '';
+  loadFaqs();
+});
+async function editFaq(id){
+  const f = (window._faqs || []).find(v => v.id === id);
+  const q = prompt('질문 수정:', f?.question ?? '');
+  if (q === null) return;
+  const a = prompt('답변 수정:', f?.answer ?? '');
+  if (a === null) return;
+  await api(`/api/hq/faqs/${id}`, { method:'PUT', body: JSON.stringify({ question: q, answer: a }) });
+  toast('FAQ가 수정되었습니다');
+  loadFaqs();
+}
+async function delFaq(id){
+  if (!confirm('이 FAQ를 삭제할까요?')) return;
+  await api(`/api/hq/faqs/${id}`, { method:'DELETE' });
+  toast('FAQ가 삭제되었습니다');
+  loadFaqs();
+}
+
 (async () => {
   const { user } = await api('/api/me');
   if (user.role !== 'hq') { location.href = '/app.html'; return; }
+  $('#whoami').textContent = user.store_name;
+  $('#brandName').textContent = user.brand;
   loadOverview();
 })();
 </script>

@@ -231,6 +231,43 @@ function loadPlan(){
     ${pro ? '' : '<button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="toast(\'데모 버전에서는 결제 없이 체험만 가능합니다\')">프로로 업그레이드 (월 29,000원)</button>'}`;
 }
 
+// ---------- 사장님 지원 챗봇 ----------
+const chatPanel = $('#chatPanel');
+$('#chatFab').addEventListener('click', () => {
+  chatPanel.classList.toggle('open');
+  if (chatPanel.classList.contains('open') && !$('#chatBody').children.length) {
+    botSay(`안녕하세요 사장님! ${me.brand} 운영 지원 챗봇 한큐봇이에요.\n발주 마감, 정산, 기능 사용법 등 무엇이든 물어보세요.`);
+    $('#chatQuick').innerHTML = ['발주 마감이 몇 시예요?', '정산은 언제 들어오나요?', 'AI 답글 어떻게 쓰나요?']
+      .map(q => `<button type="button" onclick="quickAsk(this.textContent)">${q}</button>`).join('');
+  }
+  if (chatPanel.classList.contains('open')) $('#chatText').focus();
+});
+$('#chatClose').addEventListener('click', () => chatPanel.classList.remove('open'));
+
+function addMsg(cls, text){
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.textContent = text;
+  $('#chatBody').appendChild(div);
+  $('#chatBody').scrollTop = $('#chatBody').scrollHeight;
+  return div;
+}
+const botSay = (t) => addMsg('bot', t);
+function quickAsk(q){ $('#chatText').value = q; $('#chatForm').requestSubmit(); }
+$('#chatForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('#chatText').value.trim();
+  if (!text) return;
+  $('#chatText').value = '';
+  $('#chatQuick').innerHTML = '';
+  addMsg('me', text);
+  const typing = addMsg('bot typing', '입력 중…');
+  try {
+    const { answer } = await api('/api/chat', { method:'POST', body: JSON.stringify({ message: text }) });
+    typing.remove(); botSay(answer);
+  } catch { typing.remove(); botSay('죄송해요, 잠시 후 다시 시도해 주세요.'); }
+});
+
 // ---------- 시작 ----------
 (async () => {
   try {
@@ -238,6 +275,7 @@ function loadPlan(){
     if (me.role === 'hq') { location.href = '/admin.html'; return; }
     $('#whoami').textContent = me.store_name;
     $('#storeName').textContent = me.store_name;
+    $('#chatBrand').textContent = me.brand + ' 지원';
     $('#planLabel').textContent = `${me.username} · ${me.plan === 'pro' ? '프로' : '베이직'} 플랜`;
     $('#planSmall').innerHTML = me.plan === 'pro'
       ? '<b>프로 플랜</b> 이용 중<br>다음 결제일 9월 15일'

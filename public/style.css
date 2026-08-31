@@ -134,4 +134,31 @@ td.r,th.r{text-align:right}
   padding:12px 22px;transition:transform .22s;z-index:99;box-shadow:var(--shadow);max-width:90vw}
 .toast.show{transform:translateX(-50%) translateY(0)}
 .empty{color:var(--ink3);font-size:13.5px;padding:14px 0;text-align:center}
+
+/* ---------- 사장님 지원 챗봇 위젯 ---------- */
+.chat-fab{position:fixed;right:22px;bottom:22px;z-index:90;width:54px;height:54px;
+  border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:24px;
+  box-shadow:var(--shadow);display:grid;place-items:center;transition:transform .15s}
+.chat-fab:hover{transform:scale(1.07)}
+.chat-panel{position:fixed;right:22px;bottom:86px;z-index:90;width:min(360px,calc(100vw - 44px));
+  height:min(480px,70vh);background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);display:none;flex-direction:column;overflow:hidden}
+.chat-panel.open{display:flex}
+.chat-head{padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface2);
+  display:flex;align-items:center;gap:9px}
+.chat-head b{font-size:14.5px}
+.chat-head span{font-size:12px;color:var(--ink3)}
+.chat-head button{margin-left:auto;font-size:18px;color:var(--ink3);line-height:1}
+.chat-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:9px}
+.msg{max-width:85%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.55;
+  white-space:pre-wrap;word-break:break-word}
+.msg.bot{background:var(--surface2);color:var(--ink);border-bottom-left-radius:4px;align-self:flex-start}
+.msg.me{background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:4px;align-self:flex-end}
+.msg.typing{color:var(--ink3);font-style:italic}
+.chat-quick{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px}
+.chat-quick button{font-size:12px;border:1px solid var(--line);border-radius:999px;
+  padding:5px 11px;background:var(--surface);color:var(--ink2)}
+.chat-input{display:flex;gap:8px;padding:11px 13px;border-top:1px solid var(--line)}
+.chat-input input{flex:1}
+.chat-input .btn{padding:9px 15px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}

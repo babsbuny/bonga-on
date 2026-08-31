@@ -145,6 +145,19 @@
   </main>
 </div>
 
+<!-- 사장님 지원 챗봇 -->
+<button class="chat-fab" id="chatFab" aria-label="지원 챗봇 열기">💬</button>
+<div class="chat-panel" id="chatPanel" role="dialog" aria-label="사장님 지원 챗봇">
+  <div class="chat-head">💬 <b>한큐봇</b><span id="chatBrand"></span>
+    <button id="chatClose" aria-label="닫기">×</button></div>
+  <div class="chat-body" id="chatBody"></div>
+  <div class="chat-quick" id="chatQuick"></div>
+  <form class="chat-input" id="chatForm">
+    <input id="chatText" placeholder="궁금한 걸 물어보세요" maxlength="500" autocomplete="off">
+    <button class="btn btn-primary" type="submit">전송</button>
+  </form>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
 <script src="/app.js"></script>
 </body>

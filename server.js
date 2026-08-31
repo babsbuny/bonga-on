@@ -37,11 +37,12 @@ function requireHq(req, res, next) {
 app.post('/api/login', wrap(async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '아이디와 비밀번호를 입력해 주세요' });
-  const user = await data.one('SELECT * FROM users WHERE username = ?', [username]);
+  const user = await data.one(
+    'SELECT u.*, b.name AS brand FROM users u JOIN brands b ON b.id = u.brand_id WHERE u.username = ?', [username]);
   if (!user || !bcrypt.compareSync(password, user.password_hash))
     return res.status(401).json({ error: '아이디 또는 비밀번호가 맞지 않습니다' });
   req.session.user = { id: user.id, username: user.username, role: user.role,
-    brand: user.brand, store_name: user.store_name, plan: user.plan };
+    brand: user.brand, brand_id: user.brand_id, store_name: user.store_name, plan: user.plan };
   res.json({ user: req.session.user });
 }));
 
@@ -71,7 +72,9 @@ app.get('/api/dashboard', requireLogin, wrap(async (req, res) => {
      FROM reviews WHERE store_id = ?`, [sid]);
   const unread = await data.one(
     `SELECT COUNT(*) AS c FROM notices n
-     WHERE NOT EXISTS (SELECT 1 FROM notice_reads r WHERE r.notice_id = n.id AND r.store_id = ?)`, [sid]);
+     WHERE n.brand_id = ?
+       AND NOT EXISTS (SELECT 1 FROM notice_reads r WHERE r.notice_id = n.id AND r.store_id = ?)`,
+    [req.session.user.brand_id, sid]);
   const pendingOrders = await data.one(
     `SELECT COUNT(*) AS c FROM orders WHERE store_id = ? AND status IN ('접수','확정','배송중')`, [sid]);
 
@@ -183,7 +186,8 @@ app.put('/api/reviews/:id/reply', requireLogin, wrap(async (req, res) => {
 
 // ---------- 발주 ----------
 app.get('/api/products', requireLogin, wrap(async (req, res) => {
-  res.json({ rows: await data.query('SELECT * FROM products WHERE active = 1 ORDER BY id') });
+  res.json({ rows: await data.query(
+    'SELECT * FROM products WHERE active = 1 AND brand_id = ? ORDER BY id', [req.session.user.brand_id]) });
 }));
 
 app.post('/api/orders', requireLogin, wrap(async (req, res) => {
@@ -192,7 +196,8 @@ app.post('/api/orders', requireLogin, wrap(async (req, res) => {
   let total = 0;
   const resolved = [];
   for (const it of items) {
-    const p = await data.one('SELECT * FROM products WHERE id = ? AND active = 1', [it.product_id]);
+    const p = await data.one('SELECT * FROM products WHERE id = ? AND active = 1 AND brand_id = ?',
+      [it.product_id, req.session.user.brand_id]);
     if (!p) return res.status(400).json({ error: '없는 품목이 포함되어 있습니다' });
     const qty = Math.min(999, Math.max(1, parseInt(it.qty, 10)));
     total += p.price * qty;
@@ -218,7 +223,8 @@ app.get('/api/orders', requireLogin, wrap(async (req, res) => {
 app.get('/api/notices', requireLogin, wrap(async (req, res) => {
   const rows = await data.query(
     `SELECT n.*, (SELECT 1 FROM notice_reads r WHERE r.notice_id = n.id AND r.store_id = ?) AS is_read
-     FROM notices n ORDER BY n.created_at DESC`, [req.session.user.id]);
+     FROM notices n WHERE n.brand_id = ? ORDER BY n.created_at DESC`,
+    [req.session.user.id, req.session.user.brand_id]);
   res.json({ rows });
 }));
 
@@ -236,16 +242,18 @@ app.get('/api/hq/overview', requireHq, wrap(async (req, res) => {
       (SELECT COALESCE(SUM(amount),0) FROM sales s WHERE s.store_id = u.id AND s.date >= ?) AS week,
       (SELECT COUNT(*) FROM reviews r WHERE r.store_id = u.id AND r.reply IS NULL) AS pending_reviews,
       (SELECT ROUND(AVG(rating),1) FROM reviews r WHERE r.store_id = u.id) AS avg_rating
-     FROM users u WHERE u.role = 'store' ORDER BY u.id`,
-    [data.kstDate(-1), data.kstDate(-7)]);
-  const pending = await data.one(`SELECT COUNT(*) AS c FROM orders WHERE status = '접수'`);
+     FROM users u WHERE u.role = 'store' AND u.brand_id = ? ORDER BY u.id`,
+    [data.kstDate(-1), data.kstDate(-7), req.session.user.brand_id]);
+  const pending = await data.one(
+    `SELECT COUNT(*) AS c FROM orders o JOIN users u ON u.id = o.store_id
+     WHERE o.status = '접수' AND u.brand_id = ?`, [req.session.user.brand_id]);
   res.json({ stores, pendingOrders: pending.c });
 }));
 
 app.get('/api/hq/orders', requireHq, wrap(async (req, res) => {
   const orders = await data.query(
     `SELECT o.*, u.store_name FROM orders o JOIN users u ON u.id = o.store_id
-     ORDER BY o.created_at DESC LIMIT 50`);
+     WHERE u.brand_id = ? ORDER BY o.created_at DESC LIMIT 50`, [req.session.user.brand_id]);
   for (const o of orders)
     o.items = await data.query('SELECT name, price, qty FROM order_items WHERE order_id = ?', [o.id]);
   res.json({ rows: orders });
@@ -263,9 +271,115 @@ app.put('/api/hq/orders/:id/status', requireHq, wrap(async (req, res) => {
 app.post('/api/hq/notices', requireHq, wrap(async (req, res) => {
   const { tag, title, body } = req.body || {};
   if (!title?.trim() || !body?.trim()) return res.status(400).json({ error: '제목과 내용을 입력해 주세요' });
-  await data.run('INSERT INTO notices (tag, title, body, created_at) VALUES (?,?,?,?)',
-    [(tag || '본사').trim(), title.trim(), body.trim(), data.kstNow()]);
+  await data.run('INSERT INTO notices (brand_id, tag, title, body, created_at) VALUES (?,?,?,?,?)',
+    [req.session.user.brand_id, (tag || '본사').trim(), title.trim(), body.trim(), data.kstNow()]);
   res.json({ ok: true });
+}));
+
+// ---------- 사장님 지원 챗봇 ----------
+async function chatAnswer(message, faqs, brand) {
+  const key = process.env.OPENROUTER_API_KEY;
+  const guide = '죄송해요, 이 질문은 제가 정확히 답변드리기 어려워요. 본사 소식 탭을 확인하시거나 본사 담당자에게 문의해 주세요. 이 질문은 본사에 전달해 둘게요!';
+  if (key && faqs.length) {
+    try {
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: AI_MODEL,
+          max_tokens: 400,
+          messages: [{
+            role: 'user',
+            content:
+`너는 외식 브랜드 "${brand}" 가맹점 사장님을 돕는 운영 지원 챗봇 "한큐봇"이다.
+아래 FAQ 목록에 있는 내용만 근거로 답하라. 친절한 존댓말, 2~4문장, 간결하게.
+
+FAQ 목록:
+${faqs.map((f, i) => `${i + 1}. Q: ${f.question}\n   A: ${f.answer}`).join('\n')}
+
+규칙:
+- FAQ에서 답을 찾을 수 있으면 그 내용으로 자연스럽게 답하라.
+- FAQ에 없는 내용은 절대 추측하지 말고, 답변 맨 앞에 정확히 [모름] 이라고 붙인 뒤 본사 문의를 안내하라.
+- 욕설·악성 문의에는 정중히 안내하고 대화를 마무리하라.
+
+사장님 질문: ${message}`,
+          }],
+        }),
+      });
+      if (resp.ok) {
+        const d = await resp.json();
+        let text = d.choices?.[0]?.message?.content?.trim();
+        if (text) {
+          const unknown = text.startsWith('[모름]');
+          if (unknown) text = text.replace(/^\[모름\]\s*/, '') || guide;
+          return { answer: text, answered: unknown ? 0 : 1 };
+        }
+      }
+    } catch (e) { console.error('[chat] 호출 실패:', e.message); }
+  }
+  // 대체: 키워드 매칭
+  const terms = message.replace(/[?!.,]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
+  let best = null, bestScore = 0;
+  for (const f of faqs) {
+    const hay = f.question + ' ' + f.answer;
+    const score = terms.filter(t => hay.includes(t)).length;
+    if (score > bestScore) { best = f; bestScore = score; }
+  }
+  if (best && bestScore >= 1) return { answer: best.answer, answered: 1 };
+  return { answer: guide, answered: 0 };
+}
+
+app.post('/api/chat', requireLogin, wrap(async (req, res) => {
+  const message = (req.body?.message || '').trim().slice(0, 500);
+  if (!message) return res.status(400).json({ error: '질문을 입력해 주세요' });
+  const u = req.session.user;
+  const faqs = await data.query(
+    'SELECT question, answer FROM faqs WHERE brand_id = ? ORDER BY id', [u.brand_id]);
+  const result = await chatAnswer(message, faqs, u.brand);
+  await data.run(
+    'INSERT INTO chat_logs (brand_id, store_id, question, answer, answered, created_at) VALUES (?,?,?,?,?,?)',
+    [u.brand_id, u.id, message, result.answer, result.answered, data.kstNow()]);
+  res.json(result);
+}));
+
+// ---------- 본사: FAQ 관리 · 챗봇 로그 ----------
+app.get('/api/hq/faqs', requireHq, wrap(async (req, res) => {
+  res.json({ rows: await data.query(
+    'SELECT * FROM faqs WHERE brand_id = ? ORDER BY id', [req.session.user.brand_id]) });
+}));
+
+app.post('/api/hq/faqs', requireHq, wrap(async (req, res) => {
+  const { question, answer } = req.body || {};
+  if (!question?.trim() || !answer?.trim())
+    return res.status(400).json({ error: '질문과 답변을 입력해 주세요' });
+  await data.run('INSERT INTO faqs (brand_id, question, answer, created_at) VALUES (?,?,?,?)',
+    [req.session.user.brand_id, question.trim(), answer.trim(), data.kstNow()]);
+  res.json({ ok: true });
+}));
+
+app.put('/api/hq/faqs/:id', requireHq, wrap(async (req, res) => {
+  const { question, answer } = req.body || {};
+  if (!question?.trim() || !answer?.trim())
+    return res.status(400).json({ error: '질문과 답변을 입력해 주세요' });
+  const r = await data.run('UPDATE faqs SET question = ?, answer = ? WHERE id = ? AND brand_id = ?',
+    [question.trim(), answer.trim(), req.params.id, req.session.user.brand_id]);
+  if (r.changes === 0) return res.status(404).json({ error: 'FAQ를 찾을 수 없습니다' });
+  res.json({ ok: true });
+}));
+
+app.delete('/api/hq/faqs/:id', requireHq, wrap(async (req, res) => {
+  const r = await data.run('DELETE FROM faqs WHERE id = ? AND brand_id = ?',
+    [req.params.id, req.session.user.brand_id]);
+  if (r.changes === 0) return res.status(404).json({ error: 'FAQ를 찾을 수 없습니다' });
+  res.json({ ok: true });
+}));
+
+app.get('/api/hq/chat-logs', requireHq, wrap(async (req, res) => {
+  const onlyUnanswered = req.query.filter === 'unanswered' ? 'AND c.answered = 0' : '';
+  res.json({ rows: await data.query(
+    `SELECT c.*, u.store_name FROM chat_logs c JOIN users u ON u.id = c.store_id
+     WHERE c.brand_id = ? ${onlyUnanswered} ORDER BY c.created_at DESC LIMIT 100`,
+    [req.session.user.brand_id]) });
 }));
 
 // eslint-disable-next-line no-unused-vars
