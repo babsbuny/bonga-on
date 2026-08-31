@@ -2,7 +2,7 @@
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const SCHEMA_VERSION = '2';
+const SCHEMA_VERSION = '3';
 
 const PG_URL = process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL_NON_POOLING;
 const dialect = PG_URL ? 'pg' : 'sqlite';
@@ -55,8 +55,8 @@ async function insertIgnore(sql, params = []) {
 
 // ---------- 스키마 ----------
 const PK = dialect === 'pg' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
-const TABLES = ['chat_logs', 'faqs', 'notice_reads', 'order_items', 'orders', 'notices',
-  'reviews', 'sales', 'products', 'users', 'brands'];
+const TABLES = ['customer_orders', 'chat_logs', 'faqs', 'notice_reads', 'order_items', 'orders',
+  'notices', 'reviews', 'sales', 'products', 'users', 'brands'];
 
 async function ensureSchema() {
   await run(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
@@ -106,6 +106,10 @@ async function ensureSchema() {
       id ${PK}, brand_id INTEGER NOT NULL, store_id INTEGER NOT NULL,
       question TEXT NOT NULL, answer TEXT NOT NULL, answered INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL)`,
+    `CREATE TABLE customer_orders (
+      id ${PK}, store_id INTEGER NOT NULL, platform TEXT NOT NULL,
+      items TEXT NOT NULL, total INTEGER NOT NULL, customer TEXT NOT NULL,
+      request TEXT, status TEXT NOT NULL DEFAULT '신규', created_at TEXT NOT NULL)`,
   ];
   for (const s of ddl) await run(s);
   return true;   // 시드 필요
@@ -225,6 +229,21 @@ async function seed() {
   for (const [brandId, tag, title, body, ts] of notices)
     await run('INSERT INTO notices (brand_id, tag, title, body, created_at) VALUES (?,?,?,?,?)',
       [brandId, tag, title, body, ts]);
+
+  // ===== 배달앱 고객 주문 (신규 주문 접수 데모) =====
+  const cOrders = [
+    [suwon, '배달의민족', [{ name: '간장게장 정식', qty: 1, price: 32000 }, { name: '공기밥 추가', qty: 2, price: 2000 }],
+      36000, '김*민 (010-****-3421)', '게딱지 많이 주세요!', '신규', at(0.05)],
+    [suwon, '쿠팡이츠', [{ name: '양념닭갈비 2인', qty: 1, price: 29000 }], 29000, '이*서 (010-****-8810)', null, '신규', at(0.2)],
+    [suwon, '요기요', [{ name: '새우장 덮밥', qty: 2, price: 15000 }], 30000, '박*훈 (010-****-1102)', '수저 빼주세요', '배달중', at(1)],
+    [suwon, '배달의민족', [{ name: '간장게장 정식', qty: 1, price: 32000 }], 32000, '최*아 (010-****-5566)', null, '완료', at(3)],
+    [gangnam, '배달의민족', [{ name: '울진대게장 세트', qty: 1, price: 55000 }], 55000, '정*원 (010-****-2244)', null, '신규', at(0.1)],
+    [mapo, '쿠팡이츠', [{ name: '콜드브루 라떼', qty: 2, price: 5500 }, { name: '크루아상', qty: 1, price: 4200 }],
+      15200, '한*별 (010-****-7788)', '얼음 적게요', '신규', at(0.08)],
+  ];
+  for (const [sid, platform, items, total, customer, request, status, ts] of cOrders)
+    await run(`INSERT INTO customer_orders (store_id, platform, items, total, customer, request, status, created_at)
+               VALUES (?,?,?,?,?,?,?,?)`, [sid, platform, JSON.stringify(items), total, customer, request, status, ts]);
 
   // ===== 샘플 발주 =====
   const orderId = await insert('INSERT INTO orders (store_id, status, total, created_at) VALUES (?,?,?,?)',

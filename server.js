@@ -77,6 +77,8 @@ app.get('/api/dashboard', requireLogin, wrap(async (req, res) => {
     [req.session.user.brand_id, sid]);
   const pendingOrders = await data.one(
     `SELECT COUNT(*) AS c FROM orders WHERE store_id = ? AND status IN ('접수','확정','배송중')`, [sid]);
+  const newCustomerOrders = await data.one(
+    `SELECT COUNT(*) AS c FROM customer_orders WHERE store_id = ? AND status = '신규'`, [sid]);
 
   const diff = yesterday.amount - lastWeek.amount;
   res.json({
@@ -85,7 +87,57 @@ app.get('/api/dashboard', requireLogin, wrap(async (req, res) => {
     channelsYesterday, week,
     reviews: reviewStats,
     unreadNotices: unread.c, pendingOrders: pendingOrders.c,
+    newCustomerOrders: newCustomerOrders.c,
   });
+}));
+
+// ---------- 배달앱 주문 접수 ----------
+// 배민/요기요/쿠팡이츠는 공식 오픈 API가 없어 실제 수신은 계정 연동 단계에서 구현 예정.
+// 지금은 주문 처리 흐름 전체를 제공하고, 데모 주문 생성으로 시연한다.
+const CO_FLOW = { '신규': ['접수', '거절'], '접수': ['조리중'], '조리중': ['배달중'], '배달중': ['완료'] };
+
+app.get('/api/customer-orders', requireLogin, wrap(async (req, res) => {
+  const rows = await data.query(
+    `SELECT * FROM customer_orders WHERE store_id = ?
+     ORDER BY (status = '신규') DESC, created_at DESC LIMIT 50`, [req.session.user.id]);
+  for (const r of rows) { try { r.items = JSON.parse(r.items); } catch { r.items = []; } }
+  res.json({ rows });
+}));
+
+app.post('/api/customer-orders/:id/status', requireLogin, wrap(async (req, res) => {
+  const { status } = req.body || {};
+  const cur = await data.one('SELECT status FROM customer_orders WHERE id = ? AND store_id = ?',
+    [req.params.id, req.session.user.id]);
+  if (!cur) return res.status(404).json({ error: '주문을 찾을 수 없습니다' });
+  if (!(CO_FLOW[cur.status] || []).includes(status))
+    return res.status(400).json({ error: `'${cur.status}' 상태에서는 '${status}'(으)로 바꿀 수 없습니다` });
+  await data.run('UPDATE customer_orders SET status = ? WHERE id = ?', [status, req.params.id]);
+  res.json({ ok: true });
+}));
+
+app.post('/api/customer-orders/demo', requireLogin, wrap(async (req, res) => {
+  const platforms = ['배달의민족', '쿠팡이츠', '요기요'];
+  const menus = await data.query(
+    'SELECT name, price FROM products WHERE brand_id = ? AND active = 1', [req.session.user.brand_id]);
+  if (!menus.length) return res.status(400).json({ error: '품목이 없습니다' });
+  const pick = () => menus[Math.floor(Math.random() * menus.length)];
+  const count = 1 + Math.floor(Math.random() * 2);
+  const items = [];
+  for (let i = 0; i < count; i++) {
+    const m = pick();
+    items.push({ name: m.name, qty: 1 + Math.floor(Math.random() * 2), price: m.price });
+  }
+  const total = items.reduce((s, i) => s + i.price * i.qty, 0);
+  const names = ['김*수', '이*은', '박*호', '최*린', '정*우'];
+  const customer = `${names[Math.floor(Math.random() * names.length)]} (010-****-${1000 + Math.floor(Math.random() * 9000)})`;
+  const requests = [null, '문 앞에 놔주세요', '수저 빼주세요', '빨리 부탁드려요!', null];
+  const id = await data.insert(
+    `INSERT INTO customer_orders (store_id, platform, items, total, customer, request, status, created_at)
+     VALUES (?,?,?,?,?,?,'신규',?)`,
+    [req.session.user.id, platforms[Math.floor(Math.random() * platforms.length)],
+     JSON.stringify(items), total, customer,
+     requests[Math.floor(Math.random() * requests.length)], data.kstNow()]);
+  res.json({ ok: true, id });
 }));
 
 // ---------- 매출 ----------

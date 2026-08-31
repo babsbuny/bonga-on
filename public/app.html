@@ -20,11 +20,13 @@
   <aside class="side">
     <div class="store"><b id="storeName">…</b><span id="planLabel"></span></div>
     <button data-tab="dash" class="on">📊 대시보드</button>
+    <button data-tab="corders">🧾 주문 접수 <span class="pill bad" id="coBadge" style="display:none"></span></button>
     <button data-tab="sales">💰 매출</button>
     <button data-tab="reviews">⭐ 리뷰 관리</button>
     <button data-tab="orders">🚚 발주</button>
     <button data-tab="notices">📢 본사 소식</button>
     <button data-tab="plan">💳 요금제</button>
+    <button id="chatMenuBtn" style="color:var(--accent);font-weight:700">💬 한큐봇 문의</button>
     <div class="grow"></div>
     <div class="plansmall" id="planSmall"></div>
   </aside>
@@ -52,6 +54,17 @@
           </table></div>
         </div>
       </div>
+    </section>
+
+    <!-- 배달앱 주문 접수 -->
+    <section data-panel="corders" hidden>
+      <h2 class="title">주문 접수</h2>
+      <p class="subtitle">배달의민족·쿠팡이츠·요기요 주문을 한 화면에서 접수·처리합니다. 새 주문은 10초마다 자동 갱신됩니다.</p>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+        <span class="pill acc" id="coSummary"></span>
+        <button class="btn btn-ghost btn-sm" id="demoOrderBtn" style="margin-left:auto">🧪 테스트 주문 발생 (데모)</button>
+      </div>
+      <div id="coList" style="margin-top:10px"></div>
     </section>
 
     <!-- 매출 -->
@@ -146,7 +159,7 @@
 </div>
 
 <!-- 사장님 지원 챗봇 -->
-<button class="chat-fab" id="chatFab" aria-label="지원 챗봇 열기">💬</button>
+<button class="chat-fab" id="chatFab" aria-label="지원 챗봇 열기">💬 <b>한큐봇 문의</b></button>
 <div class="chat-panel" id="chatPanel" role="dialog" aria-label="사장님 지원 챗봇">
   <div class="chat-head">💬 <b>한큐봇</b><span id="chatBrand"></span>
     <button id="chatClose" aria-label="닫기">×</button></div>

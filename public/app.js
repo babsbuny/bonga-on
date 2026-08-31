@@ -28,9 +28,12 @@ document.querySelectorAll('.side button[data-tab]').forEach(btn => {
 function showTab(tab){
   document.querySelectorAll('.side button[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== tab);
-  const loader = { dash: loadDash, sales: loadSales, reviews: () => loadReviews('pending'),
+  const loader = { dash: loadDash, corders: loadCustomerOrders, sales: loadSales,
+                   reviews: () => loadReviews('pending'),
                    orders: loadOrdersTab, notices: loadNotices, plan: loadPlan }[tab];
-  if (loader && !loaded[tab]) { loaded[tab] = true; loader(); }
+  if (loader && (!loaded[tab] || tab === 'corders')) { loaded[tab] = true; loader(); }
+  clearInterval(window._coTimer);
+  if (tab === 'corders') window._coTimer = setInterval(loadCustomerOrders, 10000);
 }
 
 // ---------- 대시보드 ----------
@@ -52,8 +55,10 @@ async function loadDash(){
       <div class="d">채널 ${d.channelsYesterday.length}개 합산</div></div>
     <div class="kpi"><div class="k">평균 평점 ${rv.pending ? `<span class="pill warn">답글 ${rv.pending}건 대기</span>` : `<span class="pill good">답글 완료</span>`}</div>
       <div class="v num">${rv.avg_rating ?? '-'}</div><div class="d">누적 리뷰 ${rv.total}건</div></div>
-    <div class="kpi"><div class="k">본사 소식 ${d.unreadNotices ? `<span class="pill acc">새 공지 ${d.unreadNotices}건</span>`:''}</div>
-      <div class="v num">${d.pendingOrders}건</div><div class="d">진행 중 발주</div></div>`;
+    <div class="kpi"><div class="k">배달앱 신규 주문 ${d.newCustomerOrders ? `<span class="pill bad">접수 대기!</span>` : `<span class="pill good">완료</span>`}</div>
+      <div class="v num">${d.newCustomerOrders}건</div>
+      <div class="d">새 공지 ${d.unreadNotices}건 · 진행 발주 ${d.pendingOrders}건</div></div>`;
+  updateCoBadge(d.newCustomerOrders);
 
   drawWeekChart(d.week);
   $('#channelRows').innerHTML = d.channelsYesterday.length
@@ -81,6 +86,53 @@ function drawWeekChart(week){
     `<span><i style="background:var(--accent)"></i>일 매출</span>
      <span>7일 합계 <b class="num">${won(week.reduce((s,w) => s + w.amount, 0))}</b></span>`;
 }
+
+// ---------- 배달앱 주문 접수 ----------
+const CO_BADGE = { '신규':'bad', '접수':'warn', '조리중':'warn', '배달중':'acc', '완료':'good', '거절':'neutral' };
+const CO_NEXT = { '신규': [['접수','btn-primary'],['거절','btn-ghost']],
+                  '접수': [['조리중','btn-primary']], '조리중': [['배달중','btn-primary']],
+                  '배달중': [['완료','btn-primary']] };
+const CO_LABEL = { '접수':'✅ 접수', '거절':'거절', '조리중':'🍳 조리 시작', '배달중':'🛵 배달 출발', '완료':'완료 처리' };
+
+async function loadCustomerOrders(){
+  const { rows } = await api('/api/customer-orders');
+  const newCount = rows.filter(r => r.status === '신규').length;
+  updateCoBadge(newCount);
+  $('#coSummary').textContent = `신규 ${newCount}건 · 진행 중 ${rows.filter(r => ['접수','조리중','배달중'].includes(r.status)).length}건`;
+  $('#coList').innerHTML = rows.length ? rows.map(o => `
+    <div class="co-card ${o.status === '신규' ? 'new' : ''}">
+      <div class="co-head">
+        <span class="pill acc">${o.platform}</span>
+        <b>#${o.id} · ${o.customer}</b>
+        <span class="pill ${CO_BADGE[o.status] || 'neutral'}">${o.status}</span>
+        <time>${o.created_at.slice(5, 16)}</time>
+      </div>
+      <ul class="co-items">${o.items.map(i =>
+        `<li><span>${i.name} × ${i.qty}</span><span class="num">${won(i.price * i.qty)}</span></li>`).join('')}</ul>
+      ${o.request ? `<div class="co-req">📢 요청사항: ${o.request}</div>` : ''}
+      <div class="co-foot">
+        <b class="num" style="font-size:16px">${won(o.total)}</b>
+        <span style="display:flex;gap:7px">${(CO_NEXT[o.status] || []).map(([st, cls]) =>
+          `<button class="btn ${cls} btn-sm" onclick="coStatus(${o.id}, '${st}')">${CO_LABEL[st] || st}</button>`).join('')}</span>
+      </div>
+    </div>`).join('') : '<p class="empty">주문이 없습니다 — "테스트 주문 발생"으로 시연해 보세요</p>';
+}
+function updateCoBadge(n){
+  const b = $('#coBadge');
+  if (n > 0) { b.textContent = n; b.style.display = 'inline-block'; }
+  else b.style.display = 'none';
+}
+async function coStatus(id, status){
+  await api(`/api/customer-orders/${id}/status`, { method:'POST', body: JSON.stringify({ status }) });
+  toast(status === '접수' ? `주문 #${id} 접수! 조리를 시작해 주세요` :
+        status === '거절' ? `주문 #${id}을(를) 거절했습니다` : `주문 #${id} → ${status}`);
+  loadCustomerOrders(); loaded.dash = false;
+}
+$('#demoOrderBtn').addEventListener('click', async () => {
+  await api('/api/customer-orders/demo', { method:'POST' });
+  toast('🔔 새 주문이 들어왔습니다!');
+  loadCustomerOrders();
+});
 
 // ---------- 매출 ----------
 async function loadSales(){
@@ -243,6 +295,10 @@ $('#chatFab').addEventListener('click', () => {
   if (chatPanel.classList.contains('open')) $('#chatText').focus();
 });
 $('#chatClose').addEventListener('click', () => chatPanel.classList.remove('open'));
+$('#chatMenuBtn').addEventListener('click', () => {
+  if (!chatPanel.classList.contains('open')) $('#chatFab').click();
+  else $('#chatText').focus();
+});
 
 function addMsg(cls, text){
   const div = document.createElement('div');
