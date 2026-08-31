@@ -2,7 +2,7 @@
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const SCHEMA_VERSION = '3';
+const SCHEMA_VERSION = '4';
 
 const PG_URL = process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL_NON_POOLING;
 const dialect = PG_URL ? 'pg' : 'sqlite';
@@ -55,8 +55,8 @@ async function insertIgnore(sql, params = []) {
 
 // ---------- 스키마 ----------
 const PK = dialect === 'pg' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
-const TABLES = ['customer_orders', 'chat_logs', 'faqs', 'notice_reads', 'order_items', 'orders',
-  'notices', 'reviews', 'sales', 'products', 'users', 'brands'];
+const TABLES = ['leads', 'customer_orders', 'chat_logs', 'faqs', 'notice_reads', 'order_items',
+  'orders', 'notices', 'reviews', 'sales', 'products', 'users', 'brands'];
 
 async function ensureSchema() {
   await run(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
@@ -76,7 +76,8 @@ async function ensureSchema() {
     `CREATE TABLE users (
       id ${PK}, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
       role TEXT NOT NULL, brand_id INTEGER NOT NULL, store_name TEXT,
-      plan TEXT NOT NULL DEFAULT 'basic', created_at TEXT NOT NULL)`,
+      plan TEXT NOT NULL DEFAULT 'basic', auto_accept INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL)`,
     `CREATE TABLE sales (
       id ${PK}, store_id INTEGER NOT NULL, date TEXT NOT NULL, channel TEXT NOT NULL,
       amount INTEGER NOT NULL, orders_count INTEGER NOT NULL DEFAULT 0)`,
@@ -110,6 +111,9 @@ async function ensureSchema() {
       id ${PK}, store_id INTEGER NOT NULL, platform TEXT NOT NULL,
       items TEXT NOT NULL, total INTEGER NOT NULL, customer TEXT NOT NULL,
       request TEXT, status TEXT NOT NULL DEFAULT '신규', created_at TEXT NOT NULL)`,
+    `CREATE TABLE leads (
+      id ${PK}, name TEXT NOT NULL, phone TEXT NOT NULL, brand_name TEXT,
+      message TEXT, created_at TEXT NOT NULL)`,
   ];
   for (const s of ddl) await run(s);
   return true;   // 시드 필요

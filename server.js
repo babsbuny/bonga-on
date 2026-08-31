@@ -42,7 +42,8 @@ app.post('/api/login', wrap(async (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash))
     return res.status(401).json({ error: '아이디 또는 비밀번호가 맞지 않습니다' });
   req.session.user = { id: user.id, username: user.username, role: user.role,
-    brand: user.brand, brand_id: user.brand_id, store_name: user.store_name, plan: user.plan };
+    brand: user.brand, brand_id: user.brand_id, store_name: user.store_name, plan: user.plan,
+    auto_accept: user.auto_accept };
   res.json({ user: req.session.user });
 }));
 
@@ -97,11 +98,36 @@ app.get('/api/dashboard', requireLogin, wrap(async (req, res) => {
 const CO_FLOW = { '신규': ['접수', '거절'], '접수': ['조리중'], '조리중': ['배달중'], '배달중': ['완료'] };
 
 app.get('/api/customer-orders', requireLogin, wrap(async (req, res) => {
+  let autoAccepted = 0;
+  if (req.session.user.auto_accept) {
+    const r = await data.run(
+      `UPDATE customer_orders SET status = '접수' WHERE store_id = ? AND status = '신규'`,
+      [req.session.user.id]);
+    autoAccepted = r.changes;
+  }
   const rows = await data.query(
     `SELECT * FROM customer_orders WHERE store_id = ?
      ORDER BY (status = '신규') DESC, created_at DESC LIMIT 50`, [req.session.user.id]);
   for (const r of rows) { try { r.items = JSON.parse(r.items); } catch { r.items = []; } }
-  res.json({ rows });
+  res.json({ rows, autoAccepted, autoAcceptOn: !!req.session.user.auto_accept });
+}));
+
+app.post('/api/settings/auto-accept', requireLogin, wrap(async (req, res) => {
+  const on = req.body?.on ? 1 : 0;
+  await data.run('UPDATE users SET auto_accept = ? WHERE id = ?', [on, req.session.user.id]);
+  req.session.user.auto_accept = on;
+  res.json({ ok: true, on: !!on });
+}));
+
+// ---------- 도입 상담 (공개 리드 수집) ----------
+app.post('/api/leads', wrap(async (req, res) => {
+  const { name, phone, brand_name, message } = req.body || {};
+  if (!name?.trim() || !phone?.trim())
+    return res.status(400).json({ error: '이름과 연락처를 입력해 주세요' });
+  await data.run('INSERT INTO leads (name, phone, brand_name, message, created_at) VALUES (?,?,?,?,?)',
+    [name.trim().slice(0, 50), phone.trim().slice(0, 30),
+     (brand_name || '').trim().slice(0, 80), (message || '').trim().slice(0, 500), data.kstNow()]);
+  res.json({ ok: true });
 }));
 
 app.post('/api/customer-orders/:id/status', requireLogin, wrap(async (req, res) => {

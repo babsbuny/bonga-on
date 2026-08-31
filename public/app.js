@@ -95,7 +95,10 @@ const CO_NEXT = { '신규': [['접수','btn-primary'],['거절','btn-ghost']],
 const CO_LABEL = { '접수':'✅ 접수', '거절':'거절', '조리중':'🍳 조리 시작', '배달중':'🛵 배달 출발', '완료':'완료 처리' };
 
 async function loadCustomerOrders(){
-  const { rows } = await api('/api/customer-orders');
+  const { rows, autoAccepted, autoAcceptOn } = await api('/api/customer-orders');
+  $('#autoAcceptToggle').checked = !!autoAcceptOn;
+  $('#autoPill').style.display = autoAcceptOn ? 'inline-block' : 'none';
+  if (autoAccepted > 0) toast(`⚡ 새 주문 ${autoAccepted}건이 자동 접수되었습니다`);
   const newCount = rows.filter(r => r.status === '신규').length;
   updateCoBadge(newCount);
   $('#coSummary').textContent = `신규 ${newCount}건 · 진행 중 ${rows.filter(r => ['접수','조리중','배달중'].includes(r.status)).length}건`;
@@ -128,6 +131,12 @@ async function coStatus(id, status){
         status === '거절' ? `주문 #${id}을(를) 거절했습니다` : `주문 #${id} → ${status}`);
   loadCustomerOrders(); loaded.dash = false;
 }
+$('#autoAcceptToggle').addEventListener('change', async (e) => {
+  const { on } = await api('/api/settings/auto-accept', { method:'POST', body: JSON.stringify({ on: e.target.checked }) });
+  me.auto_accept = on ? 1 : 0;
+  toast(on ? '⚡ 자동 접수가 켜졌습니다 — 새 주문이 바로 접수됩니다' : '자동 접수를 껐습니다');
+  loadCustomerOrders();
+});
 $('#demoOrderBtn').addEventListener('click', async () => {
   await api('/api/customer-orders/demo', { method:'POST' });
   toast('🔔 새 주문이 들어왔습니다!');

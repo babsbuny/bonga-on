@@ -4,8 +4,8 @@
 <body>
 <script>
 fetch('/api/me').then(r => r.ok ? r.json() : null).then(d => {
-  location.replace(d ? (d.user.role === 'hq' ? '/admin.html' : '/app.html') : '/login.html');
-}).catch(() => location.replace('/login.html'));
+  location.replace(d ? (d.user.role === 'hq' ? '/admin.html' : '/app.html') : '/landing.html');
+}).catch(() => location.replace('/landing.html'));
 </script>
 </body>
 </html>

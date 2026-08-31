@@ -60,9 +60,13 @@
     <section data-panel="corders" hidden>
       <h2 class="title">주문 접수</h2>
       <p class="subtitle">배달의민족·쿠팡이츠·요기요 주문을 한 화면에서 접수·처리합니다. 새 주문은 10초마다 자동 갱신됩니다.</p>
-      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
         <span class="pill acc" id="coSummary"></span>
-        <button class="btn btn-ghost btn-sm" id="demoOrderBtn" style="margin-left:auto">🧪 테스트 주문 발생 (데모)</button>
+        <label style="display:flex;align-items:center;gap:7px;margin:0 0 0 auto;font-size:13.5px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="autoAcceptToggle" style="width:auto;accent-color:var(--accent)">
+          ⚡ 자동 접수 <span class="pill acc" style="display:none" id="autoPill">ON</span>
+        </label>
+        <button class="btn btn-ghost btn-sm" id="demoOrderBtn">🧪 테스트 주문 발생 (데모)</button>
       </div>
       <div id="coList" style="margin-top:10px"></div>
     </section>
