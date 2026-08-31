@@ -1,7 +1,7 @@
 {
-  "name": "bonga-on",
+  "name": "hanq-delivery",
   "version": "0.1.0",
-  "description": "경주본가 가맹점 운영 플랫폼 MVP",
+  "description": "한큐배달 — 외식 매장 운영 월정액 SaaS (첫 데모: 경주본가)",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -13,8 +13,10 @@
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cookie-session": "^2.1.1",
     "express": "^5.2.1",
-    "express-session": "^1.19.0"
+    "express-session": "^1.19.0",
+    "pg": "^8.23.0"
   },
   "engines": {
     "node": ">=22.5.0"

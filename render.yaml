@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: bonga-on
+    name: hanq-delivery
     runtime: node
     plan: free
     buildCommand: npm install
