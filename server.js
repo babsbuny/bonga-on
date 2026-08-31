@@ -122,7 +122,7 @@ app.get('/api/reviews', requireLogin, wrap(async (req, res) => {
 // AI 답글 초안 — OpenRouter 경유, 실패 시 규칙 기반 대체
 const AI_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5';
 async function aiDraft(review, brand, storeName) {
-  const key = process.env.OPENROUTER_API_KEY;
+  const key = process.env.OPENROUTER_API_KEY?.trim();
   if (key) {
     try {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -278,7 +278,7 @@ app.post('/api/hq/notices', requireHq, wrap(async (req, res) => {
 
 // ---------- 사장님 지원 챗봇 ----------
 async function chatAnswer(message, faqs, brand) {
-  const key = process.env.OPENROUTER_API_KEY;
+  const key = process.env.OPENROUTER_API_KEY?.trim();
   const guide = '죄송해요, 이 질문은 제가 정확히 답변드리기 어려워요. 본사 소식 탭을 확인하시거나 본사 담당자에게 문의해 주세요. 이 질문은 본사에 전달해 둘게요!';
   if (key && faqs.length) {
     try {
