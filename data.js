@@ -21,8 +21,11 @@ if (dialect === 'pg') {
   const { Pool, types } = require('pg');
   types.setTypeParser(20, v => parseInt(v, 10));     // int8 (SUM 등)
   types.setTypeParser(1700, v => parseFloat(v));     // numeric (AVG/ROUND 등)
+  // URL의 sslmode 파라미터가 pg의 ssl 옵션을 덮어쓰므로 제거하고 명시 설정을 쓴다
+  const u = new URL(PG_URL);
+  u.searchParams.delete('sslmode');
   pgPool = new Pool({
-    connectionString: PG_URL,
+    connectionString: u.toString(),
     ssl: { rejectUnauthorized: false },
     max: 3,
   });
